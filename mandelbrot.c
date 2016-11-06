@@ -168,17 +168,15 @@ parallel_mandelbrot(struct mandelbrot_thread *args, struct mandelbrot_param *par
 	
 
 	// get a pointer to a new task
+// i parallel_mandelbrot
 	int current_task;
 	while (true){
-	  // Check if there is a task to get, if not go away
-	  if (NB_TASKS <= task_index)
-	    break;
-
-	  // Else get a task
 	  pthreads_mutex_lock(task_lock);
-	  current_task = task_index;
-	  task_index += 1;
+	    current_task = task_index;
+	    task_index += 1;
 	  pthreads_mutex_unlock(task_lock);
+	  if (NB_TASKS <= current_task)
+	    break;
 	  compute_chunk(&task_queue[current_index]);
 	}
 

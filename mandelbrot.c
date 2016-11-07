@@ -56,12 +56,12 @@ static int num_colors(struct mandelbrot_param* param)
 }
 
 // CUSTOM DECLRATION// i init_mandelbrot
+#if LOADBALANCE == 1
 #define GRID_SIZE 8
-pthreads_mutex_init(task_lock);
-mandelbrot_param *task_queue = malloc(sizeof(struct mandelbrot_param) * NB_TASKS)
-struct mandelbrot_param task_queue;
+struct mandelbrot_param task_queue[GRID_SIZE*GRID_SIZE];
 int task_index = 0;
 pthread_mutex_t task_lock;
+#endif
 
 /**
  * Calculates if the complex number (Cre, Cim)
@@ -78,7 +78,7 @@ static int
 is_in_Mandelbrot(float Cre, float Cim, int maxiter)
 {
 	int iter;
-	float x = 0.0, y = 0.0, xto2 = 0.0, yto2 = 0.0, dist2;
+	float x = 0.0, y = 0.0, xto2 = 0.0, yto2 = 0.0, dist2 = 0.0;
 
 	for (iter = 0; dist2 < 4 && iter <= maxiter; iter++)
 	{
@@ -146,38 +146,37 @@ parallel_mandelbrot(struct mandelbrot_thread *args, struct mandelbrot_param *par
 #if LOADBALANCE == 0
 	// Replace this code with a naive *parallel* implementation.
 	// Only thread of ID 0 compute the whole picture
-		
-		int dh = parameters->end_h/NB_THREADS;
-		int h_start = dh*args->id;
-		// Last thread can do some ~double work
-		int h_end = h_start + dh + (args->id == (NB_THREADS-1) ? parameters->end_h%NB_THREADS : 0);
+	int dh = parameters->height/NB_THREADS;
+	int h_start = dh*args->id;
+	// Last thread can do some ~double work
+	int h_end = h_start + dh + (args->id == (NB_THREADS-1) ? parameters->height%NB_THREADS : 0);
 
-		parameters->begin_h = h_start;
-		parameters->end_h = h_end;
-		// Entire width: from 0 to picture's width
-		parameters->begin_w = 0;
-		parameters->end_w = parameters->width;
+	parameters->begin_h = h_start;
+	parameters->end_h = h_end;
+	// Entire width: from 0 to picture's width
+	parameters->begin_w = 0;
+	parameters->end_w = parameters->width;
 
-		// Go
-		compute_chunk(parameters);
+	// Go
+	compute_chunk(parameters);
 #endif
 // Compiled only if LOADBALANCE = 1
 #if LOADBALANCE == 1
 	// Replace this code with your load-balanced smarter solution.
 	// Only thread of ID 0 compute the whole picture
-	
+
 
 	// get a pointer to a new task
-// i parallel_mandelbrot
+	// i parallel_mandelbrot
 	int current_task;
-	while (true){
-	  pthreads_mutex_lock(task_lock);
+	while (1){
+	  	pthread_mutex_lock(&task_lock);
 	    current_task = task_index;
 	    task_index += 1;
-	  pthreads_mutex_unlock(task_lock);
-	  if (NB_TASKS <= current_task)
-	    break;
-	  compute_chunk(&task_queue[current_index]);
+	  	pthread_mutex_unlock(&task_lock);
+	  	if (GRID_SIZE*GRID_SIZE <= current_task)
+	    	break;
+			compute_chunk(&task_queue[current_task]);
 	}
 
 
@@ -260,7 +259,7 @@ run_thread(void * buffer)
 
 		// Wait for the next work signal
 		pthread_barrier_wait(&thread_pool_barrier);
-	
+
 		// Fetch the latest parameters
 		param = mandelbrot_param;
 	}
@@ -338,19 +337,35 @@ init_mandelbrot(struct mandelbrot_param *param)
 	// Thread-based variant
 
 	// i init_mandelbrot
-	pthreads_mutex_init(task_lock);
-	task_queue = malloc(sizeof(struct mandelbrot_param) * GRID_SIZE * GRID_SIZE)
+	#if LOADBALANCE == 1
+	pthread_mutex_init(&task_lock,NULL);
 
-	for (int y = 0;y < params->end_h;y+=GRID_SIZE) {
-		for (int x =0;z < params->end_w;x+=GRID_SIZE) {
-				int index = y*GRID_SIZE + x;
-				mandelbrot_param *param = task_queue[index];
-				param->begin_h = y;
-				param->end_h = y + GRID_SIZE;
-				param->begin_w = x;
-				params->end_w = x + GRID_SIZE;
+	int index = 0;
+	int y;
+	int x;
+	for (y = 0;y < GRID_SIZE;y++) {
+		for (x =0;x < GRID_SIZE;x++) {
+				struct mandelbrot_param *param_ptr = &task_queue[index++];
+				// boring
+				param_ptr->height= param->height;
+				param_ptr->width= param->width;
+				param_ptr->maxiter= param->maxiter;
+				param_ptr->mandelbrot_color= param->mandelbrot_color;
+				param_ptr->lower_r = param->lower_r;
+				param_ptr->upper_r = param->upper_r;
+				param_ptr->lower_i = param->lower_i;
+				param_ptr->upper_i = param->upper_i;
+				param_ptr->picture = param->picture;
+				// interesting
+				param_ptr->begin_h = y*(param->height/GRID_SIZE);
+				param_ptr->end_h = (y+1)*(param->height/GRID_SIZE) +
+					(y==GRID_SIZE-1? param->height%GRID_SIZE: 0);
+				param_ptr->begin_w = x*(param->width/GRID_SIZE);
+				param_ptr->end_w = (x+1)*(param->width/GRID_SIZE) +
+					(x==GRID_SIZE-1? param->width%GRID_SIZE: 0);
 		}
 	}
+	#endif
 
 	pthread_attr_t thread_attr;
 	int i;

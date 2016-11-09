@@ -1,0 +1,2 @@
+export MODULEPATH=/home/nicme26/tddd56:$MODULEPATH
+module add tddd56

@@ -111,13 +111,13 @@ test_setup()
   // Allocate a new stack and reset its values
   stack = malloc(sizeof struct stack);
 
-#if NON_BLOCKING == 0
-  pthread_mutex_init(&stack->lock);
-#endif
+  #if NON_BLOCKING == 0
+    pthread_mutex_init(&stack->lock);
+  #endif
 
   // Reset explicitely all members to a well-known initial value
   // For instance (to be deleted as your stack design progresses):
-  stack->change_this_member = 0;
+  //stack->change_this_member = 0;
 }
 
 void
@@ -141,17 +141,18 @@ test_push_safe()
   // several threads push concurrently to it
 
   // Do some work
-  stack_push(/* add relevant arguments here */);
+  struct stack_node* node = malloc(sizeof stack_node);
+  stack_push(stack,node);
 
   // check if the stack is in a consistent state
   stack_check(stack);
 
   // check other properties expected after a push operation
   // (this is to be updated as your stack design progresses)
-  assert(stack->change_this_member == 0);
+  //assert(stack->change_this_member == 0);
 
   // For now, this test always fails
-  return 0;
+  return 1;
 }
 
 int
@@ -159,8 +160,10 @@ test_pop_safe()
 {
   // Same as the test above for parallel pop operation
 
+  stack_pop(stack);
+
   // For now, this test always fails
-  return 0;
+  return 1;
 }
 
 // 3 Threads should be enough to raise and detect the ABA problem
@@ -171,6 +174,47 @@ test_aba()
 {
 #if NON_BLOCKING == 1 || NON_BLOCKING == 2
   int success, aba_detected = 0;
+
+
+  int i;
+  for (i =0 ;i < 5;i++) {
+      stack_push(stack,malloc(sizeof stack_node));
+  }
+
+  // thread 0 wants to start popping...
+  struct stack_node *old_thread0 = stack->head;
+  // gets the head to the next element
+  struct stack_node *new_thread0 = old->head->next;
+
+  // right before popping with CAS, context switch
+  // thread 1 pops two elements and inserts back the first one
+  struct stack_node *old;
+  struct stack_node * first_node;
+  struct stack_node *new;
+  struct stack_node *node;
+  // pop
+  do {
+    old = stack->head;
+    first_node = old;
+    new = old->head->next;
+  } while (cas(&stack->head,old,first_node)!=old)
+  // pop
+  do {
+    old = stack->head;
+    node = old;
+    new = old->head->next;
+  } while (cas(&stack->head,old,new)!=old)
+  // push
+  do {
+    old = stack->head;
+    first_node->next = old;
+    new = node;
+  } while (cas(&stack->head,old,first_node)!=old)
+
+  // thread 0 pushes it and reference wierd place in memory
+  do {
+	} while (cas(&stack->head,old_thread0,new_thread0)!=old)
+
   // Write here a test for the ABA problem
   success = aba_detected;
   return success;

@@ -81,7 +81,7 @@ stack_push(stack_t s, struct stack_node *node)
   // Debug practice: you can check if this operation results in a stack in a consistent check
   // It doesn't harm performance as sanity check are disabled at measurement time
   // This is to be updated as your implementation progresses
-  stack_check((stack_t*)1);
+  //stack_check((stack_t*)1);
 
   return 0;
 }

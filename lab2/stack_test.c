@@ -48,7 +48,7 @@ typedef int data_t;
 #define DATA_SIZE sizeof(data_t)
 #define DATA_VALUE 5
 
-stack_t *stack;
+stack_t stack;
 data_t data;
 
 #if MEASURE != 0

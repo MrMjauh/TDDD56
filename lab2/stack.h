@@ -33,22 +33,20 @@ struct stack_node
   struct stack_node *next;
 };
 
-struct stack
+typedef struct stack
 {
   struct stack_node *head;
 #if NON_BLOCKING == 0
-  pthread_mutex lock;
+  pthread_mutex_t lock;
 #endif
-}
-
-typedef struct stack* stack_t;
+} *stack_t, stack_head_t;
 
 // Pushes an element in a thread-safe manner
 void
 stack_push(stack_t s, struct stack_node *node);
 
 // Pops an element in a thread-safe manner
-struct stack_node *node
+struct stack_node *
 stack_pop(stack_t s);
 
 /* Debug practice: check the boolean expression expr; if it computes to 0, print a warning message on standard error and exit */
@@ -68,6 +66,6 @@ stack_pop(stack_t s);
 
 // Debug practice: function that can check anytime is a stack is in a legal state using assert() internally
 void
-stack_check(stack_t *stack);
+stack_check(stack_t stack);
 
 #endif /* STACK_H */

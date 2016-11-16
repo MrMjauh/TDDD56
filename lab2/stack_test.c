@@ -55,22 +55,27 @@ data_t data;
 struct stack_measure_arg
 {
   int id;
+  int node_index;
+  struct stack nodes[MAX_PUSH_POP];
 };
 typedef struct stack_measure_arg stack_measure_arg_t;
 
 struct timespec t_start[NB_THREADS], t_stop[NB_THREADS], start, stop;
+
 
 #if MEASURE == 1
 void*
 stack_measure_pop(void* arg)
   {
     stack_measure_arg_t *args = (stack_measure_arg_t*) arg;
+    args->node_index=0;
     int i;
 
     clock_gettime(CLOCK_MONOTONIC, &t_start[args->id]);
     for (i = 0; i < MAX_PUSH_POP / NB_THREADS; i++)
       {
-        // See how fast your implementation can pop MAX_PUSH_POP elements in parallel
+        struct stack_node *node = stack_pop(stack); //TODO
+        assert (node=NULL);
       }
     clock_gettime(CLOCK_MONOTONIC, &t_stop[args->id]);
 
@@ -81,12 +86,13 @@ void*
 stack_measure_push(void* arg)
 {
   stack_measure_arg_t *args = (stack_measure_arg_t*) arg;
+  args->node_index=0;
   int i;
 
   clock_gettime(CLOCK_MONOTONIC, &t_start[args->id]);
   for (i = 0; i < MAX_PUSH_POP / NB_THREADS; i++)
     {
-        // See how fast your implementation can push MAX_PUSH_POP elements in parallel
+        stack_push(stack, &args->nodes[args->node_index++]);
     }
   clock_gettime(CLOCK_MONOTONIC, &t_stop[args->id]);
 
@@ -109,10 +115,10 @@ test_setup()
   data = DATA_VALUE;
 
   // Allocate a new stack and reset its values
-  stack = malloc(sizeof struct stack);
+  stack = malloc(sizeof (struct stack));
 
   #if NON_BLOCKING == 0
-    pthread_mutex_init(&stack->lock);
+    pthread_mutex_init(&stack->lock, NULL);
   #endif
 
   // Reset explicitely all members to a well-known initial value
@@ -141,7 +147,7 @@ test_push_safe()
   // several threads push concurrently to it
 
   // Do some work
-  struct stack_node* node = malloc(sizeof stack_node);
+  struct stack_node* node = malloc(sizeof (struct stack_node));
   stack_push(stack,node);
 
   // check if the stack is in a consistent state
@@ -175,16 +181,15 @@ test_aba()
 #if NON_BLOCKING == 1 || NON_BLOCKING == 2
   int success, aba_detected = 0;
 
-
   int i;
   for (i =0 ;i < 5;i++) {
-      stack_push(stack,malloc(sizeof stack_node));
+      stack_push(stack,malloc(sizeof (struct stack_node)));
   }
 
   // thread 0 wants to start popping...
   struct stack_node *old_thread0 = stack->head;
   // gets the head to the next element
-  struct stack_node *new_thread0 = old->head->next;
+  struct stack_node *new_thread0 = old_thread0->next;
 
   // right before popping with CAS, context switch
   // thread 1 pops two elements and inserts back the first one
@@ -196,24 +201,24 @@ test_aba()
   do {
     old = stack->head;
     first_node = old;
-    new = old->head->next;
-  } while (cas(&stack->head,old,first_node)!=old)
+    new = old->next;
+  } while (cas(&stack->head,old,first_node)!=old);
   // pop
   do {
     old = stack->head;
     node = old;
-    new = old->head->next;
-  } while (cas(&stack->head,old,new)!=old)
+    new = old->next;
+  } while (cas(&stack->head,old,new)!=old);
   // push
   do {
     old = stack->head;
     first_node->next = old;
     new = node;
-  } while (cas(&stack->head,old,first_node)!=old)
+  } while (cas(&stack->head,old,first_node)!=old);
 
   // thread 0 pushes it and reference wierd place in memory
   do {
-	} while (cas(&stack->head,old_thread0,new_thread0)!=old)
+	} while (cas(&stack->head,old_thread0,new_thread0)!=old);
 
   // Write here a test for the ABA problem
   success = aba_detected;

@@ -46,7 +46,7 @@
 #endif
 
 void
-stack_check(stack_t *stack)
+stack_check(stack_t stack)
 {
 // Do not perform any sanity check if performance is bein measured
 #if MEASURE == 0
@@ -68,11 +68,13 @@ stack_push(stack_t s, struct stack_node *node)
 	s->head = node;
 	pthread_mutex_unlock(&s->lock);
 #elif NON_BLOCKING == 1
+	struct stack_node *old;
+	struct stack_node *new;
   do {
-		struct stack_node *old = stack->head;
+		old = s->head;
 		node->next = old;
-		struct stack_node *new = node;
-	} while (cas(&stack->head,old,new)!=old)
+		new = node;
+	} while (cas(&s->head,old,new)!=old);
 #else
   /*** Optional ***/
   // Implement a software CAS-based stack
@@ -83,7 +85,7 @@ stack_push(stack_t s, struct stack_node *node)
   // This is to be updated as your implementation progresses
   //stack_check((stack_t*)1);
 
-  return 0;
+  return;
 }
 
 struct stack_node *
@@ -92,15 +94,21 @@ stack_pop(stack_t s)
 	struct stack_node *node;
 #if NON_BLOCKING == 0
 	pthread_mutex_lock(&s->lock);
-	node = s->head;
-	s->head = node->next;
+		node = s->head;
+		if (node != NULL){
+			s->head = node->next;
+		}
 	pthread_mutex_unlock(&s->lock);
 #elif NON_BLOCKING == 1
+	struct stack_node *old;
+	struct stack_node *new;
 	do {
-		struct stack_node *old = stack->head;
+		old = s->head;
 		node = old;
-		struct stack_node *new = old->head->next;
-	} while (cas(&stack->head,old,new)!=old)
+		if (node != NULL)
+			break;
+		new = old->next;
+	} while (cas(&s->head,old,new)!=old);
 #else
   /*** Optional ***/
   // Implement a software CAS-based stack

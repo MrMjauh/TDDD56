@@ -48,19 +48,22 @@ typedef int data_t;
 #define DATA_SIZE sizeof(data_t)
 #define DATA_VALUE 5
 
-stack_t stack;
+stack_head_t stack_head;
+stack_t stack = &stack_head;
+stack_node_t nodes[MAX_PUSH_POP];
 data_t data;
 
 #if MEASURE != 0
 struct stack_measure_arg
 {
   int id;
-  int node_index;
-  struct stack nodes[MAX_PUSH_POP];
+  stack_node_t *nodes; // changed
 };
+
 typedef struct stack_measure_arg stack_measure_arg_t;
 
 struct timespec t_start[NB_THREADS], t_stop[NB_THREADS], start, stop;
+
 
 
 #if MEASURE == 1
@@ -68,14 +71,13 @@ void*
 stack_measure_pop(void* arg)
   {
     stack_measure_arg_t *args = (stack_measure_arg_t*) arg;
-    args->node_index=0;
     int i;
 
     clock_gettime(CLOCK_MONOTONIC, &t_start[args->id]);
     for (i = 0; i < MAX_PUSH_POP / NB_THREADS; i++)
       {
-        struct stack_node *node = stack_pop(stack); //TODO
-        assert (node=NULL);
+        struct stack_node *node = stack_pop(stack);
+        //printf("popping node %d\n",node);
       }
     clock_gettime(CLOCK_MONOTONIC, &t_stop[args->id]);
 
@@ -86,13 +88,12 @@ void*
 stack_measure_push(void* arg)
 {
   stack_measure_arg_t *args = (stack_measure_arg_t*) arg;
-  args->node_index=0;
   int i;
-
   clock_gettime(CLOCK_MONOTONIC, &t_start[args->id]);
   for (i = 0; i < MAX_PUSH_POP / NB_THREADS; i++)
     {
-        stack_push(stack, &args->nodes[args->node_index++]);
+        args->nodes[i].elem = i;
+        stack_push(stack, &args->nodes[i]);
     }
   clock_gettime(CLOCK_MONOTONIC, &t_stop[args->id]);
 
@@ -115,11 +116,18 @@ test_setup()
   data = DATA_VALUE;
 
   // Allocate a new stack and reset its values
-  stack = malloc(sizeof (struct stack));
 
-  #if NON_BLOCKING == 0
+#if MEASURE == 1
+  int i;
+  for (i = 0;i < MAX_PUSH_POP;i++) {
+      // rip memory
+      stack_push(stack,&nodes[i]);
+    }
+#endif
+
+#if NON_BLOCKING == 0
     pthread_mutex_init(&stack->lock, NULL);
-  #endif
+#endif
 
   // Reset explicitely all members to a well-known initial value
   // For instance (to be deleted as your stack design progresses):
@@ -131,7 +139,6 @@ test_teardown()
 {
   // Do not forget to free your stacks after each test
   // to avoid memory leaks
-  free(stack);
 }
 
 void
@@ -180,7 +187,7 @@ test_aba()
 {
 #if NON_BLOCKING == 1 || NON_BLOCKING == 2
   int success, aba_detected = 0;
-
+  /*
   int i;
   for (i =0 ;i < 5;i++) {
       stack_push(stack,malloc(sizeof (struct stack_node)));
@@ -202,24 +209,24 @@ test_aba()
     old = stack->head;
     first_node = old;
     new = old->next;
-  } while (cas(&stack->head,old,first_node)!=old);
+  } while (CAS(&stack->head,old,first_node));
   // pop
   do {
     old = stack->head;
     node = old;
     new = old->next;
-  } while (cas(&stack->head,old,new)!=old);
+  } while (CAS(&stack->head,old,new));
   // push
   do {
     old = stack->head;
     first_node->next = old;
     new = node;
-  } while (cas(&stack->head,old,first_node)!=old);
+  } while (CAS(&stack->head,old,first_node));
 
   // thread 0 pushes it and reference wierd place in memory
   do {
-	} while (cas(&stack->head,old_thread0,new_thread0)!=old);
-
+	} while (CAS(&stack->head,old_thread0,new_thread0));
+  */
   // Write here a test for the ABA problem
   success = aba_detected;
   return success;
@@ -252,7 +259,7 @@ thread_test_cas(void* arg)
         old = *args->counter;
         local = old + 1;
 #if NON_BLOCKING == 1
-      } while (cas(args->counter, old, local) != old);
+      } while (cas(args->counter, old, local)!=old);
 #elif NON_BLOCKING == 2
       } while (software_cas(args->counter, old, local, args->lock) != old);
 #endif
@@ -328,8 +335,8 @@ setbuf(stdout, NULL);
 #else
   int i;
   pthread_t thread[NB_THREADS];
-  pthread_attr_t attr;
   stack_measure_arg_t arg[NB_THREADS];
+  pthread_attr_t attr;
 
   test_setup();
   pthread_attr_init(&attr);
@@ -338,6 +345,7 @@ setbuf(stdout, NULL);
   for (i = 0; i < NB_THREADS; i++)
     {
       arg[i].id = i;
+      arg[i].nodes = &nodes[i*(MAX_PUSH_POP / NB_THREADS)]; //changed
 #if MEASURE == 1
       pthread_create(&thread[i], &attr, stack_measure_pop, (void*)&arg[i]);
 #else

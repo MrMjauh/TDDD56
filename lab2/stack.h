@@ -27,11 +27,13 @@
 #ifndef STACK_H
 #define STACK_H
 
-struct stack_node
+#define CAS(a,b,c) (cas((size_t*)(a),(size_t)(b),(size_t)(c))!=(size_t)(b))
+
+typedef struct stack_node
 {
   int elem;
   struct stack_node *next;
-};
+} stack_node_t;
 
 typedef struct stack
 {

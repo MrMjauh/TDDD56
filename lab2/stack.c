@@ -74,7 +74,7 @@ stack_push(stack_t s, struct stack_node *node)
 		old = s->head;
 		node->next = old;
 		new = node;
-	} while (cas(&s->head,old,new)!=old);
+	} while (CAS(&s->head,old,new));
 #else
   /*** Optional ***/
   // Implement a software CAS-based stack
@@ -105,10 +105,10 @@ stack_pop(stack_t s)
 	do {
 		old = s->head;
 		node = old;
-		if (node != NULL)
+		if (node == NULL)
 			break;
 		new = old->next;
-	} while (cas(&s->head,old,new)!=old);
+	} while (CAS(&s->head,old,new));
 #else
   /*** Optional ***/
   // Implement a software CAS-based stack

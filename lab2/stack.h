@@ -60,7 +60,7 @@ stack_pop(stack_t s);
 
 // Enable assert() only if NDEBUG is not set
 #ifndef NDEBUG
-#define assert(expr) if(!expr) { fprintf(stderr, "[%s:%s:%d][ERROR] Assertion failure: %s\n", __FILE__, __FUNCTION__, __LINE__, #expr); abort(); }
+#define assert(expr) if(!(expr)) { fprintf(stderr, "[%s:%s:%d][ERROR] Assertion failure: %s\n", __FILE__, __FUNCTION__, __LINE__, #expr); abort(); }
 #else
 // Otherwise define it as nothing
 #define assert(expr)

@@ -31,6 +31,7 @@
 #include "stack.h"
 #include "non_blocking.h"
 
+
 #define test_run(test)\
   printf("[%s:%s:%i] Running test '%s'... ", __FILE__, __FUNCTION__, __LINE__, #test);\
   test_setup();\
@@ -47,6 +48,7 @@
 typedef int data_t;
 #define DATA_SIZE sizeof(data_t)
 #define DATA_VALUE 5
+
 
 stack_head_t stack_head;
 stack_t stack = &stack_head;
@@ -154,17 +156,18 @@ test_push_safe()
   // several threads push concurrently to it
 
   // Do some work
-  struct stack_node* node = malloc(sizeof (struct stack_node));
-  stack_push(stack,node);
+  nodes[0].elem = 4;
+  stack_push(stack,&nodes[0]);
 
   // check if the stack is in a consistent state
   stack_check(stack);
 
   // check other properties expected after a push operation
   // (this is to be updated as your stack design progresses)
-  //assert(stack->change_this_member == 0);
+  assert(stack->head != NULL);
+  assert(stack->head->elem == 4);
+  assert(stack->head->next == NULL);
 
-  // For now, this test always fails
   return 1;
 }
 
@@ -173,9 +176,18 @@ test_pop_safe()
 {
   // Same as the test above for parallel pop operation
 
-  stack_pop(stack);
+  // assumes test_push_safe is run before
 
-  // For now, this test always fails
+  stack_node_t *n = stack_pop(stack);
+
+  assert(stack->head == NULL);
+  assert(n->elem == 4);
+
+  n = stack_pop(stack);
+
+  assert(n == NULL);
+  assert(stack->head == NULL);
+
   return 1;
 }
 
@@ -186,11 +198,10 @@ int
 test_aba()
 {
 #if NON_BLOCKING == 1 || NON_BLOCKING == 2
-  int success, aba_detected = 0;
-  /*
+
   int i;
-  for (i =0 ;i < 5;i++) {
-      stack_push(stack,malloc(sizeof (struct stack_node)));
+  for (i =0 ;i < 3;i++) {
+      stack_push(stack, &nodes[i]);
   }
 
   // thread 0 wants to start popping...
@@ -201,7 +212,7 @@ test_aba()
   // right before popping with CAS, context switch
   // thread 1 pops two elements and inserts back the first one
   struct stack_node *old;
-  struct stack_node * first_node;
+  struct stack_node *first_node;
   struct stack_node *new;
   struct stack_node *node;
   // pop
@@ -216,20 +227,25 @@ test_aba()
     node = old;
     new = old->next;
   } while (CAS(&stack->head,old,new));
+  // we popped node, this will be interesting later
+
   // push
   do {
     old = stack->head;
     first_node->next = old;
-    new = node;
-  } while (CAS(&stack->head,old,first_node));
+    new = first_node;
+  } while (CAS(&stack->head,old,new));
 
-  // thread 0 pushes it and reference wierd place in memory
+  // thread 0 sets new_thread0 as head but new_thread0 was popped
   do {
 	} while (CAS(&stack->head,old_thread0,new_thread0));
-  */
+
+
+  return stack->head == &nodes[1];
+
   // Write here a test for the ABA problem
-  success = aba_detected;
-  return success;
+  //success = aba_detected;
+  //return success;
 #else
   // No ABA is possible with lock-based synchronization. Let the test succeed only
   return 1;
